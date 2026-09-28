@@ -105,11 +105,6 @@
                 android:text="Google" />
 
             <TextView
-                android:id="@+id/tab_provider_json_api"
-                style="@style/ProviderTabStyle"
-                android:text="Legacy" />
-
-            <TextView
                 android:id="@+id/tab_provider_reddit"
                 style="@style/ProviderTabStyle"
                 android:text="Reddit" />

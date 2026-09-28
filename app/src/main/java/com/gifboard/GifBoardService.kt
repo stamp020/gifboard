@@ -366,7 +366,6 @@ class GifBoardService : InputMethodService() {
         // Provider tabs - let the user switch GIF search backend per-search
         providerTabs = mapOf(
             "webview" to view.findViewById<TextView>(R.id.tab_provider_webview),
-            "json_api" to view.findViewById<TextView>(R.id.tab_provider_json_api),
             "reddit" to view.findViewById<TextView>(R.id.tab_provider_reddit),
             "giphy" to view.findViewById<TextView>(R.id.tab_provider_giphy)
         )
@@ -1063,7 +1062,6 @@ class GifBoardService : InputMethodService() {
         val prefs = PreferenceManager.getDefaultSharedPreferences(this)
         val safeSearch = prefs.getString("safe_search", "active") ?: "active"
         return when (key) {
-            "json_api" -> providerCache.getOrPut("json_api:$safeSearch") { JsonApiGifProvider(safeSearch) }
             "giphy" -> {
                 val apiKey = prefs.getString("giphy_api_key", "")?.trim().orEmpty()
                 if (apiKey.isEmpty()) return null
