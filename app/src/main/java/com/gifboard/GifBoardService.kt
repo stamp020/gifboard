@@ -367,6 +367,7 @@ class GifBoardService : InputMethodService() {
         providerTabs = mapOf(
             "webview" to view.findViewById<TextView>(R.id.tab_provider_webview),
             "reddit" to view.findViewById<TextView>(R.id.tab_provider_reddit),
+            "redgifs" to view.findViewById<TextView>(R.id.tab_redgifs),
             "giphy" to view.findViewById<TextView>(R.id.tab_provider_giphy)
         )
         providerTabs.forEach { (key, tabView) ->
@@ -1071,6 +1072,9 @@ class GifBoardService : InputMethodService() {
                 val subreddit = prefs.getString("reddit_subreddit", "gifs")?.trim().orEmpty()
                 val includeAdult = safeSearch == "off"
                 providerCache.getOrPut("reddit:$subreddit:$includeAdult") { RedditProvider(subreddit, includeAdult) }
+            }
+            "redgifs" -> {
+                providerCache.getOrPut("redgifs") { RedGifsProvider() }
             }
             else -> {
                 if (!::headlessWebView.isInitialized) return null

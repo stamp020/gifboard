@@ -110,6 +110,11 @@
                 android:text="Reddit" />
 
             <TextView
+                android:id="@+id/tab_redgifs"
+                style="@style/ProviderTabStyle"
+                android:text="RedGIFs" />
+
+            <TextView
                 android:id="@+id/tab_provider_giphy"
                 style="@style/ProviderTabStyle"
                 android:text="Giphy"
