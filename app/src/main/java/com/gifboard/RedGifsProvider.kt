@@ -43,10 +43,12 @@ class RedGifsProvider : PagedGifProvider() {   // ← must extend PagedGifProvid
                 val url = URL(
                     "https://api.redgifs.com/v2/gifs/search" +
                     "?type=g" +
-                    "&tags=$encoded" +
+                    "&search_text=$encoded" +
                     "&order=trending" +
                     "&count=30" +
-                    "&page=$page"
+                    // RedGifs pages are 1-indexed (page=0 is rejected with a 400),
+                    // but PagedGifProvider calls fetchPage with a 0-indexed page.
+                    "&page=${page + 1}"
                 )
 
                 val connection = url.openConnection() as HttpURLConnection
