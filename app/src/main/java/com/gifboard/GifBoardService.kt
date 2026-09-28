@@ -27,10 +27,8 @@ import androidx.core.view.inputmethod.InputContentInfoCompat
 import androidx.recyclerview.widget.RecyclerView
 import androidx.recyclerview.widget.StaggeredGridLayoutManager
 import kotlinx.coroutines.*
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import androidx.preference.PreferenceManager
-import com.facebook.drawee.backends.pipeline.Fresco
 import java.io.File
 import java.io.FileOutputStream
 import android.webkit.WebView
@@ -833,7 +831,6 @@ class GifBoardService : InputMethodService() {
         currentPage = 0
         hasMorePages = true
 
-        clearSearchCaches()
         adapter.clearAndReset()
         progressBar.visibility = View.VISIBLE
         isLoadingPage = true
@@ -922,7 +919,7 @@ class GifBoardService : InputMethodService() {
 
     private fun commitGif(contentUri: String) {
         val request = Request.Builder().url(contentUri).build()
-        OkHttpClient().newCall(request).enqueue(object : okhttp3.Callback {
+        NetworkClients.shared.newCall(request).enqueue(object : okhttp3.Callback {
             override fun onFailure(call: okhttp3.Call, e: java.io.IOException) {
                 Log.e(TAG, "Failed to download GIF", e)
                 window.window?.decorView?.post { handleDownloadFailure(contentUri) }
@@ -1024,22 +1021,6 @@ class GifBoardService : InputMethodService() {
         currentInputConnection?.commitText(url, 1)
     }
 
-    override fun onFinishInput() {
-        super.onFinishInput()
-        clearSearchCaches()
-    }
-
-    private fun clearSearchCaches() {
-        scope.launch(Dispatchers.IO) {
-            // Clear Fresco image cache (memory + disk)
-            try {
-                Fresco.getImagePipeline().clearCaches()
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to clear Fresco caches", e)
-            }
-        }
-    }
-
     override fun onDestroy() {
         super.onDestroy()
         scope.cancel()
@@ -1048,14 +1029,26 @@ class GifBoardService : InputMethodService() {
     private fun updateGifProvider() {
         val prefs = PreferenceManager.getDefaultSharedPreferences(this)
         val providerKey = prefs.getString("gif_provider", "webview") ?: "webview"
-        
-        // Only update if the provider type has actually changed
+
+        // Only update if the provider type (or its API key) has actually changed
         val currentProvider = if (::gifProvider.isInitialized) gifProvider else null
-        
+
         when (providerKey) {
             "json_api" -> {
                 if (currentProvider !is JsonApiGifProvider) {
                     gifProvider = JsonApiGifProvider()
+                }
+            }
+            "tenor" -> {
+                val apiKey = prefs.getString("tenor_api_key", "") ?: ""
+                if (currentProvider !is TenorGifProvider || currentProvider.apiKey != apiKey) {
+                    gifProvider = TenorGifProvider(apiKey)
+                }
+            }
+            "giphy" -> {
+                val apiKey = prefs.getString("giphy_api_key", "") ?: ""
+                if (currentProvider !is GiphyGifProvider || currentProvider.apiKey != apiKey) {
+                    gifProvider = GiphyGifProvider(apiKey)
                 }
             }
             else -> {

@@ -11,7 +11,10 @@ import androidx.recyclerview.widget.RecyclerView
 import androidx.recyclerview.widget.StaggeredGridLayoutManager
 import com.facebook.drawee.backends.pipeline.Fresco
 import com.facebook.drawee.controller.BaseControllerListener
+import com.facebook.imagepipeline.common.ResizeOptions
 import com.facebook.imagepipeline.image.ImageInfo
+import com.facebook.imagepipeline.request.ImageRequest
+import com.facebook.imagepipeline.request.ImageRequestBuilder
 
 /**
  * RecyclerView adapter for displaying GIF search results.
@@ -25,6 +28,11 @@ class GifAdapter(
         private const val VIEW_TYPE_GIF = 0
         private const val VIEW_TYPE_LOADING = 1
         private const val VIEW_TYPE_END = 2
+
+        // Grid cells only ever render at a fraction of screen width, so decoding/animating
+        // full-resolution source GIFs wastes CPU, memory and bandwidth. Cap the requested
+        // size to something comfortably larger than the biggest grid cell will ever be.
+        private const val GRID_TARGET_PX = 480
     }
 
     private val gifs = mutableListOf<GifItem>()
@@ -177,6 +185,11 @@ class GifAdapter(
 
             val uri = if (showLive) android.net.Uri.parse(gifItem.url) else android.net.Uri.parse(gifItem.thumbnailUrl ?: gifItem.url)
 
+            val resizeOptions = ResizeOptions(GRID_TARGET_PX, GRID_TARGET_PX)
+            val imageRequest = ImageRequestBuilder.newBuilderWithSource(uri)
+                .setResizeOptions(resizeOptions)
+                .build()
+
             // Create controller listener to detect load failures (only matters when live previews enabled)
             val controllerListener = object : BaseControllerListener<ImageInfo>() {
                 override fun onFinalImageSet(
@@ -201,7 +214,7 @@ class GifAdapter(
             }
 
             val controllerBuilder = Fresco.newDraweeControllerBuilder()
-                .setUri(uri)
+                .setImageRequest(imageRequest)
                 .setAutoPlayAnimations(showLive)
                 .setRetainImageOnFailure(true)
                 .setOldController(draweeView.controller)
@@ -210,7 +223,7 @@ class GifAdapter(
             // If we are showing live, use thumbnail as low-res placeholder
             if (showLive && gifItem.thumbnailUrl != null) {
                 controllerBuilder.setLowResImageRequest(
-                    com.facebook.imagepipeline.request.ImageRequest.fromUri(gifItem.thumbnailUrl)
+                    ImageRequest.fromUri(gifItem.thumbnailUrl)
                 )
             }
 

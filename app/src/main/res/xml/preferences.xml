@@ -51,6 +51,22 @@
 
     </androidx.preference.PreferenceCategory>
 
+    <androidx.preference.PreferenceCategory app:title="API Keys">
+
+        <EditTextPreference
+            app:key="tenor_api_key"
+            app:title="@string/pref_tenor_api_key_title"
+            app:summary="@string/pref_tenor_api_key_summary"
+            app:useSimpleSummaryProvider="false" />
+
+        <EditTextPreference
+            app:key="giphy_api_key"
+            app:title="@string/pref_giphy_api_key_title"
+            app:summary="@string/pref_giphy_api_key_summary"
+            app:useSimpleSummaryProvider="false" />
+
+    </androidx.preference.PreferenceCategory>
+
     <androidx.preference.PreferenceCategory app:title="GIF Insertion">
 
         <SwitchPreference

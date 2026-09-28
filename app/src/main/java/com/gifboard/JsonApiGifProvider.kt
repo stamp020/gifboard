@@ -2,13 +2,11 @@ package com.gifboard
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
-import java.util.concurrent.TimeUnit
 
 /**
  * Legacy GIF provider that fetches results via Google's undocumented JSON API.
@@ -24,10 +22,7 @@ class JsonApiGifProvider : GifProvider {
         private const val MAX_FILE_SIZE_MB = 10.0f
     }
 
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(10, TimeUnit.SECONDS)
-        .build()
+    private val client = NetworkClients.shared
 
     override suspend fun search(
         query: String,
