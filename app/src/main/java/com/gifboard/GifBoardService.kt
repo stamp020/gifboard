@@ -964,6 +964,7 @@ class GifBoardService : InputMethodService() {
     private fun commitGif(contentUri: String) {
         val (mimeType, extension) = mimeTypeAndExtensionFor(contentUri)
         val imageRequest = ImageRequest.fromUri(Uri.parse(contentUri))
+            ?: return handleDownloadFailure(contentUri)
         val dataSource = Fresco.getImagePipeline().fetchEncodedImage(imageRequest, this)
 
         dataSource.subscribe(object : BaseDataSubscriber<CloseableReference<PooledByteBuffer>>() {

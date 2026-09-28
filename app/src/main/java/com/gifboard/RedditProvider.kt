@@ -14,7 +14,7 @@ import java.util.UUID
 /**
  * GIF provider backed by Reddit's official OAuth API.
  *
- * Reddit locked down its plain `www.reddit.com/*.json` endpoints against
+ * Reddit locked down its plain www.reddit.com JSON endpoints against
  * unauthenticated/non-browser clients (they now return a 403 bot-check page),
  * so this uses Reddit's "installed app" OAuth grant instead: a free,
  * app-only token that doesn't require the end user to log in, just a
