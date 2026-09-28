@@ -4,9 +4,9 @@ package com.gifboard
  * A pluggable GIF search backend.
  *
  * Implementations are expected to be lightweight, per-configuration instances
- * (see [GifProviderFactory]) rather than long-lived singletons, so that a
- * change in settings (API key, safe search level, subreddit, ...) is picked
- * up by simply constructing a new instance.
+ * (see GifBoardService.resolveProvider) rather than long-lived singletons, so
+ * that a change in settings (API key, safe search level, subreddit, ...) is
+ * picked up by simply constructing a new instance.
  */
 interface GifProvider {
     /**
