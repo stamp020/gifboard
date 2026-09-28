@@ -54,16 +54,21 @@
     <androidx.preference.PreferenceCategory app:title="API Keys">
 
         <EditTextPreference
-            app:key="tenor_api_key"
-            app:title="@string/pref_tenor_api_key_title"
-            app:summary="@string/pref_tenor_api_key_summary"
-            app:useSimpleSummaryProvider="false" />
-
-        <EditTextPreference
             app:key="giphy_api_key"
             app:title="@string/pref_giphy_api_key_title"
             app:summary="@string/pref_giphy_api_key_summary"
             app:useSimpleSummaryProvider="false" />
+
+    </androidx.preference.PreferenceCategory>
+
+    <androidx.preference.PreferenceCategory app:title="Reddit">
+
+        <EditTextPreference
+            app:key="reddit_subreddit"
+            app:defaultValue="gifs"
+            app:title="@string/pref_reddit_subreddit_title"
+            app:summary="@string/pref_reddit_subreddit_summary"
+            app:useSimpleSummaryProvider="true" />
 
     </androidx.preference.PreferenceCategory>
 

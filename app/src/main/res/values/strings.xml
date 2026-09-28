@@ -35,14 +35,14 @@
     <string-array name="gif_provider_entries">
         <item>Google Search (WebView - default)</item>
         <item>Google Search (Legacy API - unreliable)</item>
-        <item>Tenor (API key required)</item>
+        <item>Reddit</item>
         <item>Giphy (API key required)</item>
     </string-array>
 
     <string-array name="gif_provider_values">
         <item>webview</item>
         <item>json_api</item>
-        <item>tenor</item>
+        <item>reddit</item>
         <item>giphy</item>
     </string-array>
 
@@ -102,9 +102,9 @@
     <string name="pref_search_timeout_title">Search Timeout (seconds)</string>
     <string name="pref_search_timeout_summary">How long to wait for results before giving up</string>
 
-    <string name="pref_tenor_api_key_title">Tenor API Key</string>
-    <string name="pref_tenor_api_key_summary">Required to use the Tenor search method</string>
     <string name="pref_giphy_api_key_title">Giphy API Key</string>
     <string name="pref_giphy_api_key_summary">Required to use the Giphy search method</string>
+    <string name="pref_reddit_subreddit_title">Reddit Subreddit</string>
+    <string name="pref_reddit_subreddit_summary">Subreddit to search for GIFs in (leave blank to search all of Reddit)</string>
 
 </resources>

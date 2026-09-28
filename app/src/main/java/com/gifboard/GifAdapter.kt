@@ -35,7 +35,7 @@ class GifAdapter(
         private const val GRID_TARGET_PX = 480
     }
 
-    private val gifs = mutableListOf<GifItem>()
+    private val gifs = mutableListOf<GifResult>()
     private var isLoading = false
     private var isEndOfList = false
     private var livePreviews = true
@@ -60,14 +60,14 @@ class GifAdapter(
         notifyDataSetChanged()
     }
 
-    fun setGifs(items: List<GifItem>) {
+    fun setGifs(items: List<GifResult>) {
         gifs.clear()
         gifs.addAll(items)
         isEndOfList = items.isEmpty()
         notifyDataSetChanged()
     }
 
-    fun addGifs(items: List<GifItem>) {
+    fun addGifs(items: List<GifResult>) {
         if (items.isEmpty()) {
             if (!isEndOfList) {
                 isEndOfList = true
@@ -169,7 +169,7 @@ class GifAdapter(
         private val brokenOverlay: View = itemView.findViewById(R.id.broken_overlay)
         private val brokenIcon: ImageView = itemView.findViewById(R.id.broken_icon)
 
-        fun bind(gifItem: GifItem) {
+        fun bind(gifItem: GifResult) {
             // Show item (might be hidden from previous bind)
             itemView.visibility = View.VISIBLE
             itemView.layoutParams.height = ViewGroup.LayoutParams.WRAP_CONTENT
@@ -239,7 +239,7 @@ class GifAdapter(
             }
         }
 
-        private fun updateVisualState(gifItem: GifItem) {
+        private fun updateVisualState(gifItem: GifResult) {
             val isBroken = gifItem.isFullLoadFailed && livePreviews
             
             when {

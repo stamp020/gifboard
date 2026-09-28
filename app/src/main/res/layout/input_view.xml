@@ -110,10 +110,9 @@
                 android:text="Legacy" />
 
             <TextView
-                android:id="@+id/tab_provider_tenor"
+                android:id="@+id/tab_provider_reddit"
                 style="@style/ProviderTabStyle"
-                android:text="Tenor"
-                android:visibility="gone" />
+                android:text="Reddit" />
 
             <TextView
                 android:id="@+id/tab_provider_giphy"

@@ -12,26 +12,29 @@ import java.nio.charset.StandardCharsets
  * Legacy GIF provider that fetches results via Google's undocumented JSON API.
  * Uses a direct OkHttp request with `async=ijn:<page>,_fmt:json` to get
  * structured JSON responses. Lightweight but may not always be available.
+ *
+ * Google Image Search has no "trending" feed, so [getTrending] falls back to
+ * a generic query.
  */
-class JsonApiGifProvider : GifProvider {
+class JsonApiGifProvider(private val safeSearch: String = "active") : PagedGifProvider() {
 
     companion object {
         private const val BASE_URL = "https://www.google.com/search"
         private const val USER_AGENT =
             "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Mobile Safari/537.36"
         private const val MAX_FILE_SIZE_MB = 10.0f
+        private const val TRENDING_QUERY = "trending gif"
     }
 
     private val client = NetworkClients.shared
 
-    override suspend fun search(
-        query: String,
-        page: Int,
-        safeSearch: String,
-        timeoutMs: Long
-    ): List<GifItem> = withContext(Dispatchers.IO) {
-        require(query.isNotBlank()) { "Query cannot be empty" }
+    override fun getName(): String = "Google (Legacy)"
 
+    override fun supportsAdultContent(): Boolean = false
+
+    override suspend fun getTrending(limit: Int): List<GifResult> = search(TRENDING_QUERY, limit)
+
+    override suspend fun fetchPage(query: String, page: Int): List<GifResult> = withContext(Dispatchers.IO) {
         val params = mapOf(
             "q" to "$query gif",
             "tbm" to "isch",
@@ -52,19 +55,20 @@ class JsonApiGifProvider : GifProvider {
             .get()
             .build()
 
-        val response = client.newCall(httpRequest).execute()
-        var content = response.body?.string() ?: ""
+        client.newCall(httpRequest).execute().use { response ->
+            var content = response.body?.string() ?: ""
 
-        // Strip Google's XSSI protection prefix
-        if (content.startsWith(")]}'")) {
-            content = content.substring(4).trim()
+            // Strip Google's XSSI protection prefix
+            if (content.startsWith(")]}'")) {
+                content = content.substring(4).trim()
+            }
+
+            parseJsonResults(content)
         }
-
-        parseJsonResults(content)
     }
 
-    private fun parseJsonResults(jsonResponse: String): List<GifItem> {
-        val items = mutableListOf<GifItem>()
+    private fun parseJsonResults(jsonResponse: String): List<GifResult> {
+        val items = mutableListOf<GifResult>()
         try {
             val json = JSONObject(jsonResponse)
             val ischj = json.optJSONObject("ischj") ?: return items
@@ -82,9 +86,10 @@ class JsonApiGifProvider : GifProvider {
                 val thumbnailUrl = gif.optString("tu").takeIf { it.isNotEmpty() }
                 val width = gif.optInt("ow", 200)
                 val height = gif.optInt("oh", 200)
+                val title = gif.optString("pt").takeIf { it.isNotEmpty() } ?: url.substringAfterLast('/')
 
                 if (url.isNotEmpty() && width > 0 && height > 0) {
-                    items.add(GifItem(url, thumbnailUrl, width, height))
+                    items.add(GifResult(url, title, thumbnailUrl, url, width, height, "Google (Legacy)"))
                 }
             }
         } catch (e: Exception) {

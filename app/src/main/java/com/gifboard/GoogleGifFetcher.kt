@@ -14,17 +14,25 @@ import kotlin.coroutines.resumeWithException
 /**
  * Fetches and parses GIFs from Google Image Search using an invisible WebView.
  * Owns the full pipeline: fetch HTML → detect readiness → parse results.
+ *
+ * Google Image Search has no "trending" feed, so [getTrending] falls back to
+ * a generic query.
  */
-class GoogleGifFetcher(private val webView: WebView) : GifProvider {
+class GoogleGifFetcher(
+    private val webView: WebView,
+    private val safeSearch: String = "active"
+) : PagedGifProvider() {
 
     companion object {
         private const val BASE_URL = "https://www.google.com/search"
         private const val USER_AGENT = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Mobile Safari/537.36"
+        private const val TRENDING_QUERY = "trending gif"
+        private const val POLL_TIMEOUT_MS = 15_000L
 
         // Shared regex: used for both polling detection and result parsing
         // Flexible to extra metadata: [2, "id", ["thumbnail", h, w], ["full", h, w]]
         val GIF_DATA_PATTERN = Regex("""\[\d+,\s*"[^"]*",\s*\["([^"]+)",\s*\d+,\s*\d+[^\]]*\],\s*\["([^"]+)",\s*(\d+),\s*(\d+)[^\]]*\]""")
-        
+
         // Machine-readable "About 0 results" or the specific semantic text in the botstuff container.
         // We use curly quotes [’‘] and ensure we're not matching CSS by avoiding bare class names.
         val EMPTY_STATE_PATTERN = Regex("(?i)(\"About 0 results\"|id=\"botstuff\".*?It looks like there aren['’‘]t any|did not match any image results)")
@@ -39,9 +47,8 @@ class GoogleGifFetcher(private val webView: WebView) : GifProvider {
          * Extracts thumbnail/full URLs, dimensions, and filters for .gif files.
          * Deduplicates by full URL.
          */
-
-        fun parseGifs(htmlResponse: String): List<GifItem> {
-            val items = mutableListOf<GifItem>()
+        fun parseGifs(htmlResponse: String): List<GifResult> {
+            val items = mutableListOf<GifResult>()
             val seenUrls = mutableSetOf<String>()
             try {
                 val matches = GIF_DATA_PATTERN.findAll(htmlResponse)
@@ -59,7 +66,7 @@ class GoogleGifFetcher(private val webView: WebView) : GifProvider {
 
                     // Filter for gifs and valid sizes
                     if (fullUrl.endsWith(".gif", ignoreCase = true) && width > 0 && height > 0) {
-                        items.add(GifItem(fullUrl, thumbnailUrl, width, height))
+                        items.add(GifResult(fullUrl, fullUrl.substringAfterLast('/'), thumbnailUrl, fullUrl, width, height, "Google"))
                         seenUrls.add(fullUrl)
                     }
                 }
@@ -70,14 +77,13 @@ class GoogleGifFetcher(private val webView: WebView) : GifProvider {
         }
     }
 
-    override suspend fun search(
-        query: String,
-        page: Int,
-        safeSearch: String,
-        timeoutMs: Long
-    ): List<GifItem> = suspendCancellableCoroutine { cont ->
-        require(query.isNotBlank()) { "Query cannot be empty" }
+    override fun getName(): String = "Google"
 
+    override fun supportsAdultContent(): Boolean = false
+
+    override suspend fun getTrending(limit: Int): List<GifResult> = search(TRENDING_QUERY, limit)
+
+    override suspend fun fetchPage(query: String, page: Int): List<GifResult> = suspendCancellableCoroutine { cont ->
         val params = mutableMapOf(
             "q" to "$query gif",
             "udm" to "2",
@@ -96,7 +102,7 @@ class GoogleGifFetcher(private val webView: WebView) : GifProvider {
         }
 
         webView.settings.userAgentString = USER_AGENT
-        
+
         val url = "$BASE_URL?$queryString"
         var isFinished = false
 
@@ -106,9 +112,7 @@ class GoogleGifFetcher(private val webView: WebView) : GifProvider {
                 cont.resume(emptyList())
             }
         }
-        webView.postDelayed(timeoutRunnable, timeoutMs)
-
-        webView.settings.userAgentString = USER_AGENT
+        webView.postDelayed(timeoutRunnable, POLL_TIMEOUT_MS)
 
         val pollRunnable = object : Runnable {
             override fun run() {

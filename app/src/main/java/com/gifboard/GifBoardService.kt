@@ -44,6 +44,7 @@ class GifBoardService : InputMethodService() {
         private const val TAG = "GifBoardService"
         private const val PREFETCH_THRESHOLD = 8
         private const val DOUBLE_TAP_DELAY_MS = 300L
+        private const val PAGE_SIZE = 25
     }
 
     enum class KeyboardMode {
@@ -99,7 +100,7 @@ class GifBoardService : InputMethodService() {
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     private var currentQuery = ""
-    private var currentPage = 0
+    private var currentLimit = PAGE_SIZE
     private var isLoadingPage = false
     private var hasMorePages = true
     private var searchJob: Job? = null
@@ -366,7 +367,7 @@ class GifBoardService : InputMethodService() {
         providerTabs = mapOf(
             "webview" to view.findViewById<TextView>(R.id.tab_provider_webview),
             "json_api" to view.findViewById<TextView>(R.id.tab_provider_json_api),
-            "tenor" to view.findViewById<TextView>(R.id.tab_provider_tenor),
+            "reddit" to view.findViewById<TextView>(R.id.tab_provider_reddit),
             "giphy" to view.findViewById<TextView>(R.id.tab_provider_giphy)
         )
         providerTabs.forEach { (key, tabView) ->
@@ -852,7 +853,7 @@ class GifBoardService : InputMethodService() {
 
         searchJob?.cancel()
         currentQuery = query
-        currentPage = 0
+        currentLimit = PAGE_SIZE
         hasMorePages = true
 
         adapter.clearAndReset()
@@ -864,11 +865,10 @@ class GifBoardService : InputMethodService() {
 
         searchJob = scope.launch(Dispatchers.Main) {
             try {
-                val prefs = PreferenceManager.getDefaultSharedPreferences(this@GifBoardService)
-                val safeSearch = prefs.getString("safe_search", "active") ?: "active"
-                val timeoutMs = prefs.getInt("search_timeout", 5) * 1000L
+                val timeoutMs = PreferenceManager.getDefaultSharedPreferences(this@GifBoardService)
+                    .getInt("search_timeout", 5) * 1000L
 
-                val gifItems = provider.search(query, 0, safeSearch, timeoutMs)
+                val gifItems = withTimeoutOrNull(timeoutMs) { provider.search(query, currentLimit) } ?: emptyList()
 
                 progressBar.visibility = View.GONE
                 isLoadingPage = false
@@ -877,7 +877,7 @@ class GifBoardService : InputMethodService() {
                     hasMorePages = false
                     adapter.setEndOfList(true)
                 } else {
-                    currentPage = 1
+                    hasMorePages = gifItems.size >= currentLimit
                     adapter.setGifs(gifItems)
 
                     // Auto-prefetch if content doesn't fill the view (can't scroll)
@@ -909,23 +909,27 @@ class GifBoardService : InputMethodService() {
 
         isLoadingPage = true
         adapter.setLoading(true)
+        val previousLimit = currentLimit
+        currentLimit += PAGE_SIZE
 
         scope.launch(Dispatchers.Main) {
             try {
-                val prefs = PreferenceManager.getDefaultSharedPreferences(this@GifBoardService)
-                val safeSearch = prefs.getString("safe_search", "active") ?: "active"
-                val timeoutMs = prefs.getInt("search_timeout", 5) * 1000L
+                val timeoutMs = PreferenceManager.getDefaultSharedPreferences(this@GifBoardService)
+                    .getInt("search_timeout", 5) * 1000L
 
-                val gifItems = provider.search(currentQuery, currentPage, safeSearch, timeoutMs)
+                // search() with a larger limit returns the full cumulative result set
+                // for this query (see PagedGifProvider), so only the tail is new.
+                val gifItems = withTimeoutOrNull(timeoutMs) { provider.search(currentQuery, currentLimit) } ?: emptyList()
+                val newItems = gifItems.drop(previousLimit)
 
                 adapter.setLoading(false)
 
-                if (gifItems.isEmpty()) {
+                if (newItems.isEmpty()) {
                     hasMorePages = false
                     adapter.setEndOfList(true)
                 } else {
-                    currentPage++
-                    adapter.addGifs(gifItems)
+                    hasMorePages = gifItems.size >= currentLimit
+                    adapter.addGifs(newItems)
 
                     // Continue prefetching if still not scrollable
                     gifRecycler.post {
@@ -1057,21 +1061,22 @@ class GifBoardService : InputMethodService() {
      */
     private fun resolveProvider(key: String): GifProvider? {
         val prefs = PreferenceManager.getDefaultSharedPreferences(this)
+        val safeSearch = prefs.getString("safe_search", "active") ?: "active"
         return when (key) {
-            "json_api" -> providerCache.getOrPut("json_api") { JsonApiGifProvider() }
-            "tenor" -> {
-                val apiKey = prefs.getString("tenor_api_key", "")?.trim().orEmpty()
-                if (apiKey.isEmpty()) return null
-                providerCache.getOrPut("tenor:$apiKey") { TenorGifProvider(apiKey) }
-            }
+            "json_api" -> providerCache.getOrPut("json_api:$safeSearch") { JsonApiGifProvider(safeSearch) }
             "giphy" -> {
                 val apiKey = prefs.getString("giphy_api_key", "")?.trim().orEmpty()
                 if (apiKey.isEmpty()) return null
-                providerCache.getOrPut("giphy:$apiKey") { GiphyGifProvider(apiKey) }
+                providerCache.getOrPut("giphy:$apiKey:$safeSearch") { GiphyGifProvider(apiKey, safeSearch) }
+            }
+            "reddit" -> {
+                val subreddit = prefs.getString("reddit_subreddit", "gifs")?.trim().orEmpty()
+                val includeAdult = safeSearch == "off"
+                providerCache.getOrPut("reddit:$subreddit:$includeAdult") { RedditProvider(subreddit, includeAdult) }
             }
             else -> {
                 if (!::headlessWebView.isInitialized) return null
-                providerCache.getOrPut("webview") { GoogleGifFetcher(headlessWebView) }
+                providerCache.getOrPut("webview:$safeSearch") { GoogleGifFetcher(headlessWebView, safeSearch) }
             }
         }
     }
@@ -1091,9 +1096,7 @@ class GifBoardService : InputMethodService() {
     private fun refreshProviderTabs() {
         if (!::providerTabs.isInitialized) return
         val prefs = PreferenceManager.getDefaultSharedPreferences(this)
-        val tenorReady = !prefs.getString("tenor_api_key", "").isNullOrBlank()
         val giphyReady = !prefs.getString("giphy_api_key", "").isNullOrBlank()
-        providerTabs["tenor"]?.visibility = if (tenorReady) View.VISIBLE else View.GONE
         providerTabs["giphy"]?.visibility = if (giphyReady) View.VISIBLE else View.GONE
 
         // Fall back to the default provider if the active one is no longer usable
