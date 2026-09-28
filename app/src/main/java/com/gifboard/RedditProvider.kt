@@ -1,5 +1,6 @@
 package com.gifboard
 
+import android.util.Log
 import android.util.Xml
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -39,6 +40,7 @@ class RedditProvider(
 ) : PagedGifProvider() {
 
     companion object {
+        private const val TAG = "RedditProvider"
         private const val USER_AGENT = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Mobile Safari/537.36"
         private const val PAGE_SIZE = 25
         private val LINK_PATTERN = Regex("""href="([^"]+)">\[link]""")
@@ -98,9 +100,12 @@ class RedditProvider(
 
         client.newCall(httpRequest).execute().use { response ->
             if (!response.isSuccessful) {
+                Log.e(TAG, "Request failed: HTTP ${response.code} for $url")
                 throw IllegalStateException("Reddit request failed: HTTP ${response.code}")
             }
-            val (items, lastEntryId) = parseFeed(response.body?.string() ?: "")
+            val body = response.body?.string() ?: ""
+            val (items, lastEntryId) = parseFeed(body)
+            Log.d(TAG, "Fetched $url -> ${items.size} matching GIFs (body ${body.length} chars)")
             if (updateCursor) {
                 if (lastEntryId == null) {
                     reachedEnd = true
@@ -167,7 +172,7 @@ class RedditProvider(
                 eventType = parser.next()
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e(TAG, "Failed to parse Reddit RSS feed", e)
         }
 
         return items to lastEntryId
