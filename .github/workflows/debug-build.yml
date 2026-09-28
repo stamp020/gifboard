@@ -1,0 +1,39 @@
+# Builds an unsigned debug APK on every push/PR and workflow_dispatch,
+# and uploads it as a downloadable workflow artifact. Unlike release.yml,
+# this needs no signing secrets, so it works out of the box on forks.
+
+name: Debug Build
+
+on:
+  push:
+    branches:
+      - '**'
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          java-version: '17.0.20+101'
+          distribution: 'temurin'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Build Debug APK
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleDebug --max-workers=1
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: GifBoard-debug-${{ github.sha }}
+          path: app/build/outputs/apk/debug/app-debug.apk
