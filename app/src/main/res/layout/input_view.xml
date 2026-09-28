@@ -83,6 +83,47 @@
 
     </LinearLayout>
 
+    <!-- Provider Tabs (switch GIF search backend per-search) -->
+    <HorizontalScrollView
+        android:id="@+id/provider_tabs_scroll"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:scrollbars="none"
+        android:background="@color/history_header_background">
+
+        <LinearLayout
+            android:id="@+id/provider_tabs_container"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingHorizontal="8dp"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:id="@+id/tab_provider_webview"
+                style="@style/ProviderTabStyle"
+                android:text="Google" />
+
+            <TextView
+                android:id="@+id/tab_provider_json_api"
+                style="@style/ProviderTabStyle"
+                android:text="Legacy" />
+
+            <TextView
+                android:id="@+id/tab_provider_tenor"
+                style="@style/ProviderTabStyle"
+                android:text="Tenor"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/tab_provider_giphy"
+                style="@style/ProviderTabStyle"
+                android:text="Giphy"
+                android:visibility="gone" />
+
+        </LinearLayout>
+    </HorizontalScrollView>
+
     <!-- Content Area (GIF Results + Keyboard Overlay) -->
     <FrameLayout
         android:id="@+id/content_area"

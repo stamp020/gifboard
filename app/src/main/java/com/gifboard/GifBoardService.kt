@@ -88,7 +88,9 @@ class GifBoardService : InputMethodService() {
     private var isSearchBarActive = false
 
     private lateinit var adapter: GifAdapter
-    private lateinit var gifProvider: GifProvider
+    private val providerCache = mutableMapOf<String, GifProvider>()
+    private var activeProviderKey: String = "webview"
+    private lateinit var providerTabs: Map<String, TextView>
     private lateinit var headlessWebView: WebView
 
     // Backspace repeat handling
@@ -206,9 +208,7 @@ class GifBoardService : InputMethodService() {
 
               vibrationStrength = prefs.getString("vibration_strength", "medium") ?: "medium"
 
-              if (::headlessWebView.isInitialized) {
-                  updateGifProvider()
-              }
+              refreshProviderTabs()
          }
     }
 
@@ -233,7 +233,8 @@ class GifBoardService : InputMethodService() {
             cookieManager.setCookie(".google.com", GoogleConsentCookies.buildSocsCookie())
         }
         (view as? ViewGroup)?.addView(headlessWebView)
-        updateGifProvider()
+        activeProviderKey = PreferenceManager.getDefaultSharedPreferences(this)
+            .getString("gif_provider", "webview") ?: "webview"
 
         searchInput = view.findViewById(R.id.search_input)
         clearButton = view.findViewById(R.id.clear_button)
@@ -360,6 +361,21 @@ class GifBoardService : InputMethodService() {
         adapter.setPreferences(livePreviews, insertLink, brokenBehavior)
 
         gifRecycler.setItemViewCacheSize(20)
+
+        // Provider tabs - let the user switch GIF search backend per-search
+        providerTabs = mapOf(
+            "webview" to view.findViewById<TextView>(R.id.tab_provider_webview),
+            "json_api" to view.findViewById<TextView>(R.id.tab_provider_json_api),
+            "tenor" to view.findViewById<TextView>(R.id.tab_provider_tenor),
+            "giphy" to view.findViewById<TextView>(R.id.tab_provider_giphy)
+        )
+        providerTabs.forEach { (key, tabView) ->
+            tabView.setOnClickListener {
+                performClickHaptic()
+                selectProvider(key)
+            }
+        }
+        refreshProviderTabs()
 
         // Infinite scroll + hide keyboard on scroll
         gifRecycler.addOnScrollListener(object : RecyclerView.OnScrollListener() {
@@ -820,6 +836,14 @@ class GifBoardService : InputMethodService() {
     private fun performSearch(query: String) {
         if (query.isBlank()) return
 
+        val provider = resolveProvider(activeProviderKey)
+        if (provider == null) {
+            Log.e(TAG, "No provider available for key: $activeProviderKey")
+            adapter.clearAndReset()
+            adapter.setEndOfList(true)
+            return
+        }
+
         // Save to history
         historyDb.addSearch(query)
 
@@ -844,7 +868,7 @@ class GifBoardService : InputMethodService() {
                 val safeSearch = prefs.getString("safe_search", "active") ?: "active"
                 val timeoutMs = prefs.getInt("search_timeout", 5) * 1000L
 
-                val gifItems = gifProvider.search(query, 0, safeSearch, timeoutMs)
+                val gifItems = provider.search(query, 0, safeSearch, timeoutMs)
 
                 progressBar.visibility = View.GONE
                 isLoadingPage = false
@@ -881,6 +905,7 @@ class GifBoardService : InputMethodService() {
 
     private fun loadMoreGifs() {
         if (currentQuery.isBlank() || isLoadingPage || !hasMorePages) return
+        val provider = resolveProvider(activeProviderKey) ?: return
 
         isLoadingPage = true
         adapter.setLoading(true)
@@ -891,7 +916,7 @@ class GifBoardService : InputMethodService() {
                 val safeSearch = prefs.getString("safe_search", "active") ?: "active"
                 val timeoutMs = prefs.getInt("search_timeout", 5) * 1000L
 
-                val gifItems = gifProvider.search(currentQuery, currentPage, safeSearch, timeoutMs)
+                val gifItems = provider.search(currentQuery, currentPage, safeSearch, timeoutMs)
 
                 adapter.setLoading(false)
 
@@ -1026,36 +1051,65 @@ class GifBoardService : InputMethodService() {
         scope.cancel()
     }
 
-    private fun updateGifProvider() {
+    /**
+     * Resolves (and caches) the [GifProvider] for a tab key.
+     * Returns null when the provider needs an API key that hasn't been set yet.
+     */
+    private fun resolveProvider(key: String): GifProvider? {
         val prefs = PreferenceManager.getDefaultSharedPreferences(this)
-        val providerKey = prefs.getString("gif_provider", "webview") ?: "webview"
-
-        // Only update if the provider type (or its API key) has actually changed
-        val currentProvider = if (::gifProvider.isInitialized) gifProvider else null
-
-        when (providerKey) {
-            "json_api" -> {
-                if (currentProvider !is JsonApiGifProvider) {
-                    gifProvider = JsonApiGifProvider()
-                }
-            }
+        return when (key) {
+            "json_api" -> providerCache.getOrPut("json_api") { JsonApiGifProvider() }
             "tenor" -> {
-                val apiKey = prefs.getString("tenor_api_key", "") ?: ""
-                if (currentProvider !is TenorGifProvider || currentProvider.apiKey != apiKey) {
-                    gifProvider = TenorGifProvider(apiKey)
-                }
+                val apiKey = prefs.getString("tenor_api_key", "")?.trim().orEmpty()
+                if (apiKey.isEmpty()) return null
+                providerCache.getOrPut("tenor:$apiKey") { TenorGifProvider(apiKey) }
             }
             "giphy" -> {
-                val apiKey = prefs.getString("giphy_api_key", "") ?: ""
-                if (currentProvider !is GiphyGifProvider || currentProvider.apiKey != apiKey) {
-                    gifProvider = GiphyGifProvider(apiKey)
-                }
+                val apiKey = prefs.getString("giphy_api_key", "")?.trim().orEmpty()
+                if (apiKey.isEmpty()) return null
+                providerCache.getOrPut("giphy:$apiKey") { GiphyGifProvider(apiKey) }
             }
             else -> {
-                if (currentProvider !is GoogleGifFetcher) {
-                    gifProvider = GoogleGifFetcher(headlessWebView)
-                }
+                if (!::headlessWebView.isInitialized) return null
+                providerCache.getOrPut("webview") { GoogleGifFetcher(headlessWebView) }
             }
+        }
+    }
+
+    /** Switches the active search provider and re-runs the current query against it, if any. */
+    private fun selectProvider(key: String) {
+        if (key == activeProviderKey) return
+        if (resolveProvider(key) == null) return
+        activeProviderKey = key
+        highlightActiveTab()
+        if (currentQuery.isNotBlank()) {
+            performSearch(currentQuery)
+        }
+    }
+
+    /** Shows/hides provider tabs based on which are usable (e.g. have an API key) and highlights the active one. */
+    private fun refreshProviderTabs() {
+        if (!::providerTabs.isInitialized) return
+        val prefs = PreferenceManager.getDefaultSharedPreferences(this)
+        val tenorReady = !prefs.getString("tenor_api_key", "").isNullOrBlank()
+        val giphyReady = !prefs.getString("giphy_api_key", "").isNullOrBlank()
+        providerTabs["tenor"]?.visibility = if (tenorReady) View.VISIBLE else View.GONE
+        providerTabs["giphy"]?.visibility = if (giphyReady) View.VISIBLE else View.GONE
+
+        // Fall back to the default provider if the active one is no longer usable
+        // (e.g. its API key was cleared in Settings).
+        if (resolveProvider(activeProviderKey) == null) {
+            activeProviderKey = "webview"
+        }
+        highlightActiveTab()
+    }
+
+    private fun highlightActiveTab() {
+        if (!::providerTabs.isInitialized) return
+        providerTabs.forEach { (key, tabView) ->
+            val isActive = key == activeProviderKey
+            tabView.setTextColor(if (isActive) 0xFF8AB4F8.toInt() else 0xFFAAAAAA.toInt())
+            tabView.setTypeface(null, if (isActive) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
         }
     }
 }
