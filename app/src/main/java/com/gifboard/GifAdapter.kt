@@ -183,7 +183,7 @@ class GifAdapter(
             // Determine if this item should show/play live
             val showLive = livePreviews
 
-            val uri = if (showLive) android.net.Uri.parse(gifItem.url) else android.net.Uri.parse(gifItem.thumbnailUrl ?: gifItem.url)
+            val uri = if (showLive) android.net.Uri.parse(gifItem.fullUrl) else android.net.Uri.parse(gifItem.previewUrl ?: gifItem.fullUrl)
 
             val resizeOptions = ResizeOptions(GRID_TARGET_PX, GRID_TARGET_PX)
             val imageRequest = ImageRequestBuilder.newBuilderWithSource(uri)
@@ -221,17 +221,17 @@ class GifAdapter(
                 .setControllerListener(controllerListener)
 
             // If we are showing live, use thumbnail as low-res placeholder
-            if (showLive && gifItem.thumbnailUrl != null) {
+            if (showLive && gifItem.previewUrl != null) {
                 controllerBuilder.setLowResImageRequest(
-                    ImageRequest.fromUri(gifItem.thumbnailUrl)
+                    ImageRequest.fromUri(gifItem.previewUrl)
                 )
             }
 
             draweeView.controller = controllerBuilder.build()
-            itemView.setOnClickListener { onGifClick(gifItem.url) }
+            itemView.setOnClickListener { onGifClick(gifItem.fullUrl) }
             itemView.setOnLongClickListener { 
                 if (insertLinkOnLongPress) {
-                    onGifLongClick(gifItem.url)
+                    onGifLongClick(gifItem.fullUrl)
                     true
                 } else {
                     false
