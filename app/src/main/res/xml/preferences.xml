@@ -64,6 +64,12 @@
     <androidx.preference.PreferenceCategory app:title="Reddit">
 
         <EditTextPreference
+            app:key="reddit_client_id"
+            app:title="@string/pref_reddit_client_id_title"
+            app:summary="@string/pref_reddit_client_id_summary"
+            app:useSimpleSummaryProvider="false" />
+
+        <EditTextPreference
             app:key="reddit_subreddit"
             app:defaultValue="gifs"
             app:title="@string/pref_reddit_subreddit_title"

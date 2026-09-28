@@ -107,7 +107,8 @@
             <TextView
                 android:id="@+id/tab_provider_reddit"
                 style="@style/ProviderTabStyle"
-                android:text="Reddit" />
+                android:text="Reddit"
+                android:visibility="gone" />
 
             <TextView
                 android:id="@+id/tab_redgifs"

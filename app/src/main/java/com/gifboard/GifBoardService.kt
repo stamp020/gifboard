@@ -27,12 +27,19 @@ import androidx.core.view.inputmethod.InputContentInfoCompat
 import androidx.recyclerview.widget.RecyclerView
 import androidx.recyclerview.widget.StaggeredGridLayoutManager
 import kotlinx.coroutines.*
-import okhttp3.Request
 import androidx.preference.PreferenceManager
 import java.io.File
 import java.io.FileOutputStream
 import android.webkit.WebView
 import android.webkit.CookieManager
+import com.facebook.common.executors.CallerThreadExecutor
+import com.facebook.common.memory.PooledByteBuffer
+import com.facebook.common.memory.PooledByteBufferInputStream
+import com.facebook.common.references.CloseableReference
+import com.facebook.datasource.BaseDataSubscriber
+import com.facebook.datasource.DataSource
+import com.facebook.drawee.backends.pipeline.Fresco
+import com.facebook.imagepipeline.request.ImageRequest
 
 /**
  * Main InputMethodService for the GIF IME.
@@ -946,44 +953,82 @@ class GifBoardService : InputMethodService() {
         }
     }
 
+    /**
+     * Fetches the GIF to send via Fresco's own image pipeline instead of a fresh
+     * network request. Since the user has almost always already previewed this
+     * exact GIF (that's how they found it to tap), it's usually sitting in
+     * Fresco's disk cache already - this turns "send" into a local file read
+     * instead of a second full download. fetchEncodedImage returns the raw
+     * encoded bytes (no resizing applied), so this is always the full-quality file.
+     */
     private fun commitGif(contentUri: String) {
-        val request = Request.Builder().url(contentUri).build()
-        NetworkClients.shared.newCall(request).enqueue(object : okhttp3.Callback {
-            override fun onFailure(call: okhttp3.Call, e: java.io.IOException) {
-                Log.e(TAG, "Failed to download GIF", e)
+        val (mimeType, extension) = mimeTypeAndExtensionFor(contentUri)
+        val imageRequest = ImageRequest.fromUri(Uri.parse(contentUri))
+        val dataSource = Fresco.getImagePipeline().fetchEncodedImage(imageRequest, this)
+
+        dataSource.subscribe(object : BaseDataSubscriber<CloseableReference<PooledByteBuffer>>() {
+            override fun onNewResultImpl(dataSource: DataSource<CloseableReference<PooledByteBuffer>>) {
+                if (!dataSource.isFinished) return
+                val ref = dataSource.result
+                if (ref == null) {
+                    window.window?.decorView?.post { handleDownloadFailure(contentUri) }
+                    return
+                }
+                try {
+                    saveEncodedGifAndCommit(ref, contentUri, mimeType, extension)
+                } finally {
+                    CloseableReference.closeSafely(ref)
+                }
+            }
+
+            override fun onFailureImpl(dataSource: DataSource<CloseableReference<PooledByteBuffer>>) {
+                Log.e(TAG, "Failed to fetch GIF", dataSource.failureCause)
                 window.window?.decorView?.post { handleDownloadFailure(contentUri) }
             }
+        }, CallerThreadExecutor.getInstance())
+    }
 
-            override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
-                if (!response.isSuccessful || response.body == null) {
-                    Log.e(TAG, "Failed to download GIF: $response")
-                    window.window?.decorView?.post { handleDownloadFailure(contentUri) }
-                    return
+    private fun saveEncodedGifAndCommit(
+        ref: CloseableReference<PooledByteBuffer>,
+        contentUri: String,
+        mimeType: String,
+        extension: String
+    ) {
+        val imagesDir = File(cacheDir, "images")
+        if (!imagesDir.exists() && !imagesDir.mkdirs()) {
+            Log.e(TAG, "Failed to create images directory")
+            window.window?.decorView?.post { handleDownloadFailure(contentUri) }
+            return
+        }
+        val file = File(imagesDir, "${System.currentTimeMillis()}.$extension")
+
+        try {
+            PooledByteBufferInputStream(ref.get()).use { input ->
+                FileOutputStream(file).use { output ->
+                    input.copyTo(output)
                 }
-
-                val imagesDir = File(cacheDir, "images")
-                if (!imagesDir.exists() && !imagesDir.mkdirs()) {
-                    Log.e(TAG, "Failed to create images directory")
-                    return
-                }
-                val file = File(imagesDir, "${System.currentTimeMillis()}.gif")
-
-                try {
-                    response.body?.byteStream()?.use { input ->
-                        FileOutputStream(file).use { output ->
-                            input.copyTo(output)
-                        }
-                    }
-                } catch (e: java.io.IOException) {
-                    Log.e(TAG, "Failed to save GIF", e)
-                    window.window?.decorView?.post { handleDownloadFailure(contentUri) }
-                    return
-                }
-
-                val linkUri = Uri.parse(contentUri)
-                window.window?.decorView?.post { doCommitContent("GIF", "image/gif", file, linkUri) }
             }
-        })
+        } catch (e: java.io.IOException) {
+            Log.e(TAG, "Failed to save GIF", e)
+            window.window?.decorView?.post { handleDownloadFailure(contentUri) }
+            return
+        }
+
+        val linkUri = Uri.parse(contentUri)
+        window.window?.decorView?.post { doCommitContent("GIF", mimeType, file, linkUri) }
+    }
+
+    /** Picks a mime type/extension from the URL's own file extension rather than assuming .gif. */
+    private fun mimeTypeAndExtensionFor(url: String): Pair<String, String> {
+        val path = Uri.parse(url).lastPathSegment?.lowercase(java.util.Locale.US) ?: ""
+        return when {
+            path.endsWith(".mp4") -> "video/mp4" to "mp4"
+            path.endsWith(".webm") -> "video/webm" to "webm"
+            path.endsWith(".png") -> "image/png" to "png"
+            path.endsWith(".jpg") || path.endsWith(".jpeg") -> "image/jpeg" to "jpg"
+            path.endsWith(".webp") -> "image/webp" to "webp"
+            else -> "image/gif" to "gif"
+        }
     }
 
     /**
@@ -1069,9 +1114,13 @@ class GifBoardService : InputMethodService() {
                 providerCache.getOrPut("giphy:$apiKey:$safeSearch") { GiphyGifProvider(apiKey, safeSearch) }
             }
             "reddit" -> {
+                val clientId = prefs.getString("reddit_client_id", "")?.trim().orEmpty()
+                if (clientId.isEmpty()) return null
                 val subreddit = prefs.getString("reddit_subreddit", "gifs")?.trim().orEmpty()
                 val includeAdult = safeSearch == "off"
-                providerCache.getOrPut("reddit:$subreddit:$includeAdult") { RedditProvider(subreddit, includeAdult) }
+                providerCache.getOrPut("reddit:$clientId:$subreddit:$includeAdult") {
+                    RedditProvider(clientId, subreddit, includeAdult)
+                }
             }
             "redgifs" -> {
                 providerCache.getOrPut("redgifs") { RedGifsProvider() }
@@ -1100,6 +1149,8 @@ class GifBoardService : InputMethodService() {
         val prefs = PreferenceManager.getDefaultSharedPreferences(this)
         val giphyReady = !prefs.getString("giphy_api_key", "").isNullOrBlank()
         providerTabs["giphy"]?.visibility = if (giphyReady) View.VISIBLE else View.GONE
+        val redditReady = !prefs.getString("reddit_client_id", "").isNullOrBlank()
+        providerTabs["reddit"]?.visibility = if (redditReady) View.VISIBLE else View.GONE
 
         // Fall back to the default provider if the active one is no longer usable
         // (e.g. its API key was cleared in Settings).
