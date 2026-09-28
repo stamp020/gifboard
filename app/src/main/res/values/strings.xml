@@ -34,7 +34,7 @@
     <!-- GIF search provider options -->
     <string-array name="gif_provider_entries">
         <item>Google Search (WebView - default)</item>
-        <item>Reddit (Client ID required)</item>
+        <item>Reddit</item>
         <item>Giphy (API key required)</item>
     </string-array>
 
@@ -102,8 +102,6 @@
 
     <string name="pref_giphy_api_key_title">Giphy API Key</string>
     <string name="pref_giphy_api_key_summary">Required to use the Giphy search method</string>
-    <string name="pref_reddit_client_id_title">Reddit Client ID</string>
-    <string name="pref_reddit_client_id_summary">Required. Get a free one at reddit.com/prefs/apps (create an "installed app")</string>
     <string name="pref_reddit_subreddit_title">Reddit Subreddit</string>
     <string name="pref_reddit_subreddit_summary">Subreddit to search for GIFs in (leave blank to search all of Reddit)</string>
 

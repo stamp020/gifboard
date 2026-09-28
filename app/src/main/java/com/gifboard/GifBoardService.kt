@@ -1115,13 +1115,8 @@ class GifBoardService : InputMethodService() {
                 providerCache.getOrPut("giphy:$apiKey:$safeSearch") { GiphyGifProvider(apiKey, safeSearch) }
             }
             "reddit" -> {
-                val clientId = prefs.getString("reddit_client_id", "")?.trim().orEmpty()
-                if (clientId.isEmpty()) return null
                 val subreddit = prefs.getString("reddit_subreddit", "gifs")?.trim().orEmpty()
-                val includeAdult = safeSearch == "off"
-                providerCache.getOrPut("reddit:$clientId:$subreddit:$includeAdult") {
-                    RedditProvider(clientId, subreddit, includeAdult)
-                }
+                providerCache.getOrPut("reddit:$subreddit") { RedditProvider(subreddit) }
             }
             "redgifs" -> {
                 providerCache.getOrPut("redgifs") { RedGifsProvider() }
@@ -1150,8 +1145,6 @@ class GifBoardService : InputMethodService() {
         val prefs = PreferenceManager.getDefaultSharedPreferences(this)
         val giphyReady = !prefs.getString("giphy_api_key", "").isNullOrBlank()
         providerTabs["giphy"]?.visibility = if (giphyReady) View.VISIBLE else View.GONE
-        val redditReady = !prefs.getString("reddit_client_id", "").isNullOrBlank()
-        providerTabs["reddit"]?.visibility = if (redditReady) View.VISIBLE else View.GONE
 
         // Fall back to the default provider if the active one is no longer usable
         // (e.g. its API key was cleared in Settings).
