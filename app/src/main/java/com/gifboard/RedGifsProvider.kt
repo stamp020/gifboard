@@ -43,7 +43,7 @@ class RedGifsProvider : PagedGifProvider() {   // ← must extend PagedGifProvid
                 val url = URL(
                     "https://api.redgifs.com/v2/gifs/search" +
                     "?type=g" +
-                    "&search_text=$encoded" +
+                    "&tags=$encoded" +
                     "&order=trending" +
                     "&count=30" +
                     // RedGifs pages are 1-indexed (page=0 is rejected with a 400),

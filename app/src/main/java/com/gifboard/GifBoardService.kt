@@ -375,6 +375,8 @@ class GifBoardService : InputMethodService() {
             "webview" to view.findViewById<TextView>(R.id.tab_provider_webview),
             "reddit" to view.findViewById<TextView>(R.id.tab_provider_reddit),
             "redgifs" to view.findViewById<TextView>(R.id.tab_redgifs),
+            "nsfwmonster" to view.findViewById<TextView>(R.id.tab_nsfwmonster),
+            "infini" to view.findViewById<TextView>(R.id.tab_infini),
             "giphy" to view.findViewById<TextView>(R.id.tab_provider_giphy)
         )
         providerTabs.forEach { (key, tabView) ->
@@ -1120,6 +1122,12 @@ class GifBoardService : InputMethodService() {
             }
             "redgifs" -> {
                 providerCache.getOrPut("redgifs") { RedGifsProvider() }
+            }
+            "nsfwmonster" -> {
+                providerCache.getOrPut("nsfwmonster") { NsfwMonsterProvider() }
+            }
+            "infini" -> {
+                providerCache.getOrPut("infinimonster") { InfiniProvider() }
             }
             else -> {
                 if (!::headlessWebView.isInitialized) return null

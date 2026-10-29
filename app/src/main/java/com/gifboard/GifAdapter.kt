@@ -206,7 +206,9 @@ class GifAdapter(
 
                 override fun onFailure(id: String?, throwable: Throwable?) {
                     // Only track failure if live previews enabled (otherwise we're loading thumbnail which usually works)
-                    if (showLive) {
+                    // but only if not sources with mp4 because isFullLoadFailed tends to always be true
+                    // TODO: figure how to not have to do these special sourceName checks
+                    if (showLive && gifItem.sourceName != "RedGIFs" && gifItem.sourceName != "NsfwMonster" && gifItem.sourceName != "Infini") {
                         gifItem.isFullLoadFailed = true
                         updateVisualState(gifItem)
                     }

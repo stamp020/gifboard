@@ -77,9 +77,13 @@ dependencies {
     implementation 'com.facebook.fresco:fresco:3.9.0'
     implementation 'com.facebook.fresco:animated-gif:3.9.0'
     implementation 'com.facebook.fresco:imagepipeline-okhttp3:3.9.0'
-    
+
+    implementation 'org.jsoup:jsoup:1.21.2'
+
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0'
     implementation 'androidx.preference:preference-ktx:1.2.1'
+
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
 }
 
 // Disable baseline.prof generation for reproducible builds
